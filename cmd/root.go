@@ -12,6 +12,7 @@ import (
 	"os/exec"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/mjehanno/new/internal/pipe"
 	"github.com/mjehanno/new/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -56,9 +57,22 @@ new will give you the possibility to fetch directly template you've created and 
 
 			p := tea.NewProgram(tea.Model(tui.InitialModel()), tea.WithAltScreen())
 			if err := p.Start(); err != nil {
-				log.Println(fmt.Errorf("alas, there's been an error: %w", err))
+				log.Println(fmt.Errorf("alas, there's been an error: %w", err).Error())
 				os.Exit(1)
 			}
+
+			if url := <-pipe.Chan; url != "" {
+				cmd := exec.Command("cookiecutter", url)
+				cmd.Stderr = os.Stderr
+				cmd.Stdin = os.Stdin
+				cmd.Stdout = os.Stdout
+
+				err := cmd.Run()
+				if err != nil {
+					log.Println(fmt.Errorf("failed to run command : %w", err).Error())
+				}
+			}
+
 		} else {
 			cmd := exec.Command("cookiecutter", args[0])
 			cmd.Stderr = os.Stderr
@@ -66,7 +80,7 @@ new will give you the possibility to fetch directly template you've created and 
 			cmd.Stdin = os.Stdin
 			err := cmd.Run()
 			if err != nil {
-				log.Println(fmt.Errorf("error while running cookiecutter : %w", err))
+				log.Println(fmt.Errorf("error while running cookiecutter : %w", err).Error())
 			}
 		}
 	},
