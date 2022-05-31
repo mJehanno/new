@@ -8,6 +8,14 @@ type SearchResult struct {
 	Language    string
 }
 
+type FirstSearchResultMessage struct {
+	SearchResults []SearchResult
+}
+
 type SearchResultMessage struct {
+	SearchResults []SearchResult
+}
+
+type LastSearchResultMessage struct {
 	SearchResults []SearchResult
 }

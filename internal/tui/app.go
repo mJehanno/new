@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -12,8 +11,6 @@ import (
 	"github.com/mjehanno/new/internal/message"
 	"github.com/mjehanno/new/internal/pipe"
 )
-
-type languageColor string
 
 const (
 	javascript = "#e3f542"
@@ -30,11 +27,12 @@ const (
 )
 
 type appModel struct {
-	ctx       context.Context
-	table     table.Model
-	statusBar statusbar.Bubble
-	rows      []table.Row
-	page      int
+	ctx          context.Context
+	table        table.Model
+	statusBar    statusbar.Bubble
+	rows         []table.Row
+	displayTable bool
+	page         int
 }
 
 const (
@@ -66,9 +64,10 @@ func InitialModel() *appModel {
 		},
 	)
 	return &appModel{
-		ctx:       ctx,
-		statusBar: status,
-		page:      1,
+		ctx:          ctx,
+		statusBar:    status,
+		displayTable: false,
+		page:         1,
 		table: table.New(
 			[]table.Column{
 				table.NewColumn(columnKeyFullname, "Fullname", 40).WithFiltered(true),
@@ -82,7 +81,7 @@ func InitialModel() *appModel {
 }
 
 func (m appModel) Init() tea.Cmd {
-	return command.InitSearch(m.ctx)
+	return tea.Batch(command.Search(m.ctx, 1))
 }
 
 func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -90,48 +89,26 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case message.ErrorMessage:
 		m.statusBar.SetContent("", msg.Error.Error(), "", "")
+	case message.FirstSearchResultMessage:
+		rows := processNewRow(msg.SearchResults)
+		m.rows = append(m.rows, rows...)
+		m.page++
+		//fmt.Println(fmt.Sprintf("newSize : %v, percent %v", newSize, percent))
+		//pCmd := m.progress.IncrPercent(percent)
+		return tea.Model(m), tea.Batch(command.Search(m.ctx, m.page))
 	case message.SearchResultMessage:
-		for _, result := range msg.SearchResults {
-			color := ""
-			switch result.Language {
-			case "Python":
-				color = python
-			case "JavaScript":
-				color = javascript
-			case "TypeScript":
-				color = typescript
-			case "C#":
-				color = csharp
-			case "Swift":
-				color = swift
-			case "Java":
-				color = java
-			case "Ruby":
-				color = ruby
-			case "C++":
-				color = cpp
-			case "Go":
-				color = golang
-			case "Rust":
-				color = rust
-			case "PHP":
-				color = php
-			}
-
-			m.rows = append(m.rows, table.NewRow(
-				table.RowData{
-					columnKeyFullname: result.Fullname,
-					columnKeyDesc:     result.Description,
-					columnKeyLang:     table.NewStyledCell(result.Language, lipgloss.NewStyle().Foreground(lipgloss.Color(color))),
-					columnKeyStars:    result.Stars,
-					columnHTMLURL:     result.HTMLURL,
-				},
-			))
-		}
-
-		m.table = m.table.WithRows(m.rows).WithStaticFooter(fmt.Sprintf("Page %v / %v", m.table.CurrentPage(), command.TotalPageNumber))
-		m.table, cmd = m.table.Update(msg)
-		return tea.Model(m), cmd
+		rows := append(m.rows, processNewRow(msg.SearchResults)...)
+		m.rows = rows
+		m.page++
+		return tea.Model(m), tea.Batch(command.Search(m.ctx, m.page))
+	case message.LastSearchResultMessage:
+		var tableCmd tea.Cmd
+		m.rows = append(m.rows, processNewRow(msg.SearchResults)...)
+		m.table = m.table.WithRows(m.rows)
+		m.table, tableCmd = m.table.Update(msg)
+		m.displayTable = true
+		m.page = 0
+		return tea.Model(m), tea.Batch(tableCmd)
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -146,6 +123,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.WindowSizeMsg:
 		m.statusBar.SetSize(msg.Width)
+
 	}
 
 	m.table, cmd = m.table.Update(msg)
@@ -155,9 +133,53 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m appModel) View() string {
 	s := ""
-	s += m.table.View()
-	s += "\n \n"
-	s += m.statusBar.View()
+	if m.displayTable {
+		s += m.table.View()
+		s += "\n \n"
+		s += m.statusBar.View()
+	}
 	s += "\n"
 	return s
+}
+
+func processNewRow(searchResults []message.SearchResult) []table.Row {
+	rows := make([]table.Row, 0)
+	for _, result := range searchResults {
+		color := ""
+		switch result.Language {
+		case "Python":
+			color = python
+		case "JavaScript":
+			color = javascript
+		case "TypeScript":
+			color = typescript
+		case "C#":
+			color = csharp
+		case "Swift":
+			color = swift
+		case "Java":
+			color = java
+		case "Ruby":
+			color = ruby
+		case "C++":
+			color = cpp
+		case "Go":
+			color = golang
+		case "Rust":
+			color = rust
+		case "PHP":
+			color = php
+		}
+
+		rows = append(rows, table.NewRow(
+			table.RowData{
+				columnKeyFullname: result.Fullname,
+				columnKeyDesc:     result.Description,
+				columnKeyLang:     table.NewStyledCell(result.Language, lipgloss.NewStyle().Foreground(lipgloss.Color(color))),
+				columnKeyStars:    result.Stars,
+				columnHTMLURL:     result.HTMLURL,
+			},
+		))
+	}
+	return rows
 }

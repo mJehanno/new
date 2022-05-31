@@ -19,10 +19,11 @@ var (
 	TotalRow        int
 )
 
-func InitSearch(ctx context.Context) tea.Cmd {
+func Search(ctx context.Context, pageNumber int) tea.Cmd {
 	opt := github.SearchOptions{
 		ListOptions: github.ListOptions{
 			PerPage: RequestSize,
+			Page:    pageNumber,
 		},
 	}
 	gclient := github.NewClient(nil)
@@ -54,46 +55,19 @@ func InitSearch(ctx context.Context) tea.Cmd {
 		sr.Stars = *r.StargazersCount
 		result = append(result, sr)
 	}
-	return func() tea.Msg {
-		return message.SearchResultMessage{
-			SearchResults: result,
-		}
-	}
-}
 
-func SearchPage(ctx context.Context, pageNumber int) tea.Cmd {
-	gclient := github.NewClient(nil)
-	opt := github.SearchOptions{
-		ListOptions: github.ListOptions{
-			Page:    pageNumber,
-			PerPage: RequestSize,
-		},
-	}
-	pagedResult, _, err := gclient.Search.Repositories(ctx, search, &opt)
-	if err != nil {
+	if pageNumber == 1 {
 		return func() tea.Msg {
-			return message.ErrorMessage{
-				Error: err,
+			return message.FirstSearchResultMessage{
+				SearchResults: result,
 			}
 		}
-	}
-	result := make([]message.SearchResult, 0)
-	for _, r := range pagedResult.Repositories {
-		sr := message.SearchResult{}
-
-		sr.Fullname = *r.FullName
-		if r.Description != nil {
-			sr.Description = *r.Description
+	} else if pageNumber == searchresult.GetTotal()/100 {
+		return func() tea.Msg {
+			return message.LastSearchResultMessage{
+				SearchResults: result,
+			}
 		}
-		if r.HTMLURL != nil {
-			sr.HTMLURL = *r.HTMLURL
-		}
-		if r.Language != nil {
-			sr.Language = *r.Language
-		}
-		sr.Stars = *r.StargazersCount
-
-		result = append(result, sr)
 	}
 	return func() tea.Msg {
 		return message.SearchResultMessage{
