@@ -26,7 +26,7 @@ aurs:
     name: new
     description: "cookiecutter wrapper, let you search through github for template"
     depends:
-    - cookiecutter
+    - python-cookiecutter
     private_key: /home/egmar/.ssh/aur
     git_url: 'ssh://aur@aur.archlinux.org/new-bin.git'
 brews:
